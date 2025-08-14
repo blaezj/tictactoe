@@ -54,6 +54,15 @@ class TicTacToeBoard:
         self.arr[row, col].filledBy = "_"
         self.arr[row, col].timeFilled = 0
 
+    def clearBoard(self):
+        rowNum = 0
+        for row in self.arr:
+            colNum = 0
+            for col in row:
+                self.unfillBox(rowNum, colNum)
+                colNum += 1
+            rowNum += 1
+
     def timeCheckBoard(self):
         rowNum = 0
         for row in self.arr:
@@ -184,6 +193,7 @@ class Player:
 
 class Game:
     gamePlayers_list: list[Player] = []
+    winner: str = None
     # for easy keeping track of whso turn it is
     currentPlayerTurn: int = -1
     board: TicTacToeBoard = None
@@ -191,6 +201,7 @@ class Game:
     def __init__(self, players_list: list[Player], board: TicTacToeBoard ):
         self.gamePlayers_list = players_list
         self.board = board
+        self.winner = None
 
         # rotates through players given and assigns them a number
         for i in range(len(self.gamePlayers_list)):
@@ -202,6 +213,18 @@ class Game:
         if(len(self.gamePlayers_list) > 1):
             self.gamePlayers_list[0].playerTurn = True
 
+    '''
+    Resets the board sets winner to none and 
+    gives first turn to whoever is next
+
+    '''
+    def resetGame(self):
+        self.board.clearBoard()
+        self.winner = None
+        # sets the first player to true
+        if(len(self.gamePlayers_list) > 1):
+            self.gamePlayers_list[0].playerTurn = True
+    
     # rotates to the next players
     def rotateTurn(self):
         for i in range(len(self.gamePlayers_list)):
@@ -231,8 +254,10 @@ class Game:
         return False
 
     # wrapper function
-    def checkWin(self) -> bool:
-        return self.board.checkWin()
+    def checkWin(self) -> (bool, str):
+        win, winner = self.board.checkWin()
+        self.winner = winner
+        return (win, winner)
     
     # sort of wrapper
     def deleteOldBoxes(self):

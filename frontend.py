@@ -53,6 +53,7 @@ class WorkerSignals(QObject):
 
     finished = pyqtSignal(str)
     killthread = pyqtSignal() 
+    updateGui = pyqtSignal()
 
 class Worker(QRunnable):
     '''
@@ -95,66 +96,78 @@ class Worker(QRunnable):
     def run(self):
         # init the runner func with passed args kwargs
         print("thread start")
-        #self.signals.inputNeeded.connect(self.inputReciever)
-
-        self.fn(*self.args, **self.kwargs)
+        self.signals.killthread.connect(self.killSelf)
+        
         while(True):
+            print("updateGui1")
 
-            # uses walrus op to assign result to checkWin, 
-            # result is a tuple of (bool, str)
-            if((result := self.game.checkWin())[0]):
-                winner = result[1]
-                self.signals.finished.emit(winner)
-                break;
+            self.signals.updateGui.emit()
+            while(True):
+                # uses walrus op to assign result to checkWin, 
+                # result is a tuple of (bool, str)
+                
+                if((result := self.game.checkWin())[0]):
+                    print("winner")
+                    self.game.winner = result[1]
+                    self.signals.finished.emit(self.game.winner)
+                    break;
 
-            
-            # delete boxes that are too old
-            self.game.deleteOldBoxes()
-            
-            # gui update
-            self.fn(*self.args, **self.kwargs)
+                
 
-            # determine who is next!
-            self.game.determineTurn()
-            
-            # this letter is the symbol for whoever is next
-            let = self.game.gamePlayers_list[game.currentPlayerTurn].playerSymbol
-            
+                # delete boxes that are too old
+                print("deleteOldBoxes")
+                self.game.deleteOldBoxes()
+                
+                # gui update
+                #self.fn(*self.args, **self.kwargs)
+                print("updateGui2")
+                self.signals.updateGui.emit()
 
-                      
-            # this pauses until we recieve and input from one of the buttons
-            # aka, just wait for input.
-            # this is unlocked within the function which recieves input
-            self.mutex.lock()
-            if self.pause:
-                print("waiting...")
-                self.wait_condition.wait(self.mutex)
-            self.mutex.unlock()
-           
+                # determine who is next!
+                print("determine turn")
+                self.game.determineTurn()
+                
+                # this letter is the symbol for whoever is next
+                print("gets letter for whos next")
+                let = self.game.gamePlayers_list[game.currentPlayerTurn].playerSymbol
+                
 
-            # might seem weird, but this way if the player picks
-            # a spot already chosen, we just double rotate back to them
-            if(not self.game.completeTurn(self.row, self.col, let)):
+                          
+                # this pauses until we recieve and input from one of the buttons
+                # aka, just wait for input.
+                # this is unlocked within the function which recieves input
+                self.mutex.lock()
+                if self.pause:
+                    print("waiting...")
+                    self.wait_condition.wait(self.mutex)
+                self.mutex.unlock()
+               
+
+                # might seem weird, but this way if the player picks
+                # a spot already chosen, we just double rotate back to them
+                if(not self.game.completeTurn(self.row, self.col, let)):
+                    self.game.rotateTurn()
+                    self.game.removeOneFromTime()
+
+                self.pause = True
+                
+                # gui update 
+                #self.fn(*self.args, **self.kwargs) 
+                self.signals.updateGui.emit()
+                 
+                #self.game.board.printBoard()
+                # rotates to next persons turn
                 self.game.rotateTurn()
-                self.game.removeOneFromTime()
-
-            self.pause = True
-            
-            # gui update 
-            self.fn(*self.args, **self.kwargs)
-            
-            #self.game.board.printBoard()
-            # rotates to next persons turn
-            self.game.rotateTurn()
-    
+        
 
         
-        # so we are done with the main code, lets notify who won ig?
-        
-        self.fn2(winner)
+            # so we are done with the main code, lets notify who won ig?
+            # nvm removed 
+            self.game.resetGame() 
+            result = None
+            let = None
 
         # connect thread to kill self
-        self.signals.killthread.connect(self.killSelf)
 
     def unpause(self):
         self.mutex.lock()
@@ -168,8 +181,8 @@ class Worker(QRunnable):
         self.col = location[0]
         self.unpause()
 
-    def killSelf(self):
-        print("thread done")
+    def killSelf(self): 
+        self.wait_condition.wakeOne()
         quit()
                 
 
@@ -193,10 +206,15 @@ class Window(QWidget):
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.resize(600, 600)
 
-
+    
         # create instance
         self.layout = QGridLayout()
+        self.layoutV = QVBoxLayout()
 
+        self.quitButton = QPushButton("quit")
+        self.quitButton.pressed.connect(self.killButton)
+
+        self.layoutV.addWidget(self.quitButton)
         # below creates buttons and connects button to func
         self.arrButtons = [None] * 9
         for i in range(9):
@@ -222,23 +240,22 @@ class Window(QWidget):
         #button3.setIconSize(QtCore.QSize(100,100))
         
         self.worker.signals.finished.connect(self.showWinnerBox)
+        self.worker.signals.updateGui.connect(self.guiUpdate)
 
-        self.setLayout(self.layout)
+        self.layoutV.addLayout(self.layout)
+        self.setLayout(self.layoutV)
+        
+
         self.setStyleSheet(WINDOWSTYLE)
         self.threadpool.start(self.worker)
     
     def showWinnerBox(self, winner):
-        self.worker.signals.killthread.emit()
-
-
-        
         msg = QMessageBox() 
         msg.setWindowFlag(Qt.FramelessWindowHint)
         retryButton = msg.addButton(str("REPLAY"), QMessageBox.ActionRole) 
         msg.setText("WINNER: ")
         msg.exec()
         #if msg.clickedButton() == retryButton:
-        self.threadpool.start(self.worker)
 
 
     '''
@@ -254,6 +271,11 @@ class Window(QWidget):
         self.worker.inputReciever(location)
         
         #print("button", button, "at row/col", location[:2])
+    
+    def killButton(self):
+        self.worker.signals.killthread.emit() 
+        quit()
+        #kills thread
 
     '''
     updates the gui by going through the entire
