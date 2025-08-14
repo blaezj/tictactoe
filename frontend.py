@@ -52,7 +52,7 @@ class WorkerSignals(QObject):
     '''
 
     finished = pyqtSignal(str)
-    
+    killthread = pyqtSignal() 
 
 class Worker(QRunnable):
     '''
@@ -60,9 +60,10 @@ class Worker(QRunnable):
 
     fn is the function we pass to the worker to run
     '''
-    def __init__(self, fn, game, *args, **kwargs):
+    def __init__(self, fn, fn2, game, *args, **kwargs):
         super().__init__()
         self.fn = fn
+        self.fn2 = fn2
         self.game = game
         self.mutex = QMutex()
         self.wait_condition = QWaitCondition()
@@ -147,7 +148,13 @@ class Worker(QRunnable):
             self.game.rotateTurn()
     
 
-        print("thread done")
+        
+        # so we are done with the main code, lets notify who won ig?
+        
+        self.fn2(winner)
+
+        # connect thread to kill self
+        self.signals.killthread.connect(self.killSelf)
 
     def unpause(self):
         self.mutex.lock()
@@ -156,10 +163,14 @@ class Worker(QRunnable):
         self.wait_condition.wakeOne()
     
     def inputReciever(self, location):
-        print("at row/co" location[:2])
+        print("at row/co", location[:2])
         self.row = location[1]
         self.col = location[0]
         self.unpause()
+
+    def killSelf(self):
+        print("thread done")
+        quit()
                 
 
 # Subclass of QMainWindow
@@ -176,9 +187,13 @@ class Window(QWidget):
         print("Multithreading with max %d threads" % self.threadpool.maxThreadCount())
        
         # below creates worker thread to run backedn
-        self.worker = Worker(self.guiUpdate, self.game)
-        self.setWindowTitle("Super TicTacToe")
+        self.worker = Worker(self.guiUpdate, self.showWinnerBox, self.game)
         
+        self.setWindowTitle("Super TicTacToe")
+        self.setWindowFlag(Qt.FramelessWindowHint)
+        self.resize(600, 600)
+
+
         # create instance
         self.layout = QGridLayout()
 
@@ -205,11 +220,27 @@ class Window(QWidget):
  
         #button3.setIcon(QtGui.QIcon('x.png'))
         #button3.setIconSize(QtCore.QSize(100,100))
+        
+        self.worker.signals.finished.connect(self.showWinnerBox)
 
         self.setLayout(self.layout)
         self.setStyleSheet(WINDOWSTYLE)
         self.threadpool.start(self.worker)
-              
+    
+    def showWinnerBox(self, winner):
+        self.worker.signals.killthread.emit()
+
+
+        
+        msg = QMessageBox() 
+        msg.setWindowFlag(Qt.FramelessWindowHint)
+        retryButton = msg.addButton(str("REPLAY"), QMessageBox.ActionRole) 
+        msg.setText("WINNER: ")
+        msg.exec()
+        #if msg.clickedButton() == retryButton:
+        self.threadpool.start(self.worker)
+
+
     '''
     This function executes on a button click.
     It gets the index of the button

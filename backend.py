@@ -1,5 +1,8 @@
 import numpy as np
 
+SYMBOLS = ["x", "o", "v"]
+
+
 class Box:
     def __init__(self):
         self.filled: bool = False
@@ -177,7 +180,7 @@ class Player:
         playerSymbol: str = None
 
     def chooseSymbol(self) -> str:
-        return input("choose symbol by typing on keyboard:")
+        return SYMBOLS[self.playerNum] 
 
 class Game:
     gamePlayers_list: list[Player] = []
@@ -192,6 +195,7 @@ class Game:
         # rotates through players given and assigns them a number
         for i in range(len(self.gamePlayers_list)):
             self.gamePlayers_list[i].playerNum = i
+            # this chooses their symbol
             self.gamePlayers_list[i].playerSymbol = self.gamePlayers_list[i].chooseSymbol()
             
         # sets the first player to true
